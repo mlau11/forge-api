@@ -1,6 +1,6 @@
+import Database from "better-sqlite3";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import Database from "better-sqlite3";
 
 const currentPath = dirname(fileURLToPath(import.meta.url));
 const DB_PATH =

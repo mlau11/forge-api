@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "node --watch src/server.ts",
+    "dev": "node src/migrate.ts && node --watch src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "typecheck": "tsc --noEmit",
     "check:sql": "node scripts/check-schema.ts"
@@ -14,12 +14,15 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/better-sqlite3": "^9.6.0",
+    "argon2": "^0.45.1",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "uuidv7": "^1.2.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",
