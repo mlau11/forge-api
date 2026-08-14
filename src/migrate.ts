@@ -31,3 +31,7 @@ export const migrate = (dir: string = MIGRATIONS_DIR): void => {
     console.log(`Applied ${file}`);
   }
 };
+
+if (import.meta.main) {
+  migrate();
+}

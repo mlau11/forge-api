@@ -1,10 +1,11 @@
+import cors from "cors";
 import express, {
   type NextFunction,
   type Request,
   type Response,
 } from "express";
-import cors from "cors";
 import { migrate } from "./migrate.ts";
+import { authRouter } from "./routes/auth.ts";
 
 const app = express();
 const PORT = 3001;
@@ -23,6 +24,8 @@ app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+app.use("/auth", authRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
