@@ -5,7 +5,7 @@ import { uuidv7 } from "uuidv7";
 import z from "zod";
 import { db } from "../db.ts";
 import { isSQLiteError } from "../lib/crypto.ts";
-import { EmailTakenError } from "../lib/errors.ts";
+import { EmailTakenError, InvalidCredentialsError } from "../lib/errors.ts";
 import { createSession, SESSION_DURATION_SECONDS } from "../lib/session.ts";
 
 interface UserRow {
@@ -17,22 +17,26 @@ interface UserRow {
 
 type UserInsert = Omit<UserRow, "created_at">;
 type RegistrationInput = z.infer<typeof RegistrationSchema>;
+type LoginInput = z.infer<typeof LoginSchema>;
 
 export const authRouter = Router();
 
 const RegistrationSchema = z.object({
-  email: z.email(),
+  email: z.email().toLowerCase(),
   password: z.string().min(10).max(200),
+});
+
+const LoginSchema = z.object({
+  email: z.email().toLowerCase(),
+  password: z.string(),
 });
 
 const insertUser = db.prepare(
   "INSERT INTO users (id, email, password_hash) VALUES (@id, @email, @password_hash)",
 );
 
-export const registerUser = async (body: RegistrationInput) => {
-  const { email, password } = body;
+export const registerUser = async ({ email, password }: RegistrationInput) => {
   const id = uuidv7();
-  const normalizedEmail = email.toLowerCase();
 
   try {
     const password_hash = await argon2.hash(password);
@@ -42,22 +46,45 @@ export const registerUser = async (body: RegistrationInput) => {
       return createSession(id);
     });
 
-    const rawToken = randomBytes(32).toString("base64url");
-
-    register({
+    const rawToken = register({
       id,
-      email: normalizedEmail,
+      email,
       password_hash,
     });
 
-    return { id, email: normalizedEmail, rawToken };
+    return { id, email, rawToken };
   } catch (error) {
     if (isSQLiteError(error) && error.code === "SQLITE_CONSTRAINT_UNIQUE") {
-      throw new EmailTakenError(normalizedEmail);
+      throw new EmailTakenError(email);
     }
 
     throw error;
   }
+};
+
+const findUserByEmail = db.prepare<[string], UserRow>(
+  "SELECT id, email, password_hash FROM users WHERE email = ?",
+);
+
+const DUMMY_HASH = await argon2.hash(randomBytes(32).toString("hex"));
+
+const loginUser = async ({ email, password }: LoginInput) => {
+  const result = findUserByEmail.get(email);
+
+  if (!result) {
+    await argon2.verify(DUMMY_HASH, password);
+    throw new InvalidCredentialsError();
+  }
+
+  const isVerified = await argon2.verify(result.password_hash, password);
+
+  if (!isVerified) {
+    throw new InvalidCredentialsError();
+  }
+
+  const rawToken = createSession(result.id);
+
+  return { id: result.id, email: result.email, rawToken };
 };
 
 authRouter.post("/register", async (req, res) => {
@@ -83,6 +110,32 @@ authRouter.post("/register", async (req, res) => {
       return res
         .status(409)
         .json({ error: "This email is already registered." });
+    }
+    throw error;
+  }
+});
+
+authRouter.post("/login", async (req, res) => {
+  const parsed = LoginSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues });
+  }
+
+  try {
+    const { id, email, rawToken } = await loginUser(parsed.data);
+
+    res.cookie("session", rawToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: SESSION_DURATION_SECONDS * 1000,
+    });
+
+    return res.status(200).json({ id, email });
+  } catch (error) {
+    if (error instanceof InvalidCredentialsError) {
+      return res.status(401).json({ error: "Invalid email or password." });
     }
     throw error;
   }
