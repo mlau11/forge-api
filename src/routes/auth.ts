@@ -1,5 +1,5 @@
 import * as argon2 from "argon2";
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import { randomBytes } from "node:crypto";
 import { uuidv7 } from "uuidv7";
 import z from "zod";
@@ -8,6 +8,7 @@ import { isSQLiteError } from "../lib/crypto.ts";
 import { EmailTakenError, InvalidCredentialsError } from "../lib/errors.ts";
 import {
   createSession,
+  deleteSession,
   SESSION_DURATION_SECONDS,
   type PublicUser,
 } from "../lib/session.ts";
@@ -153,4 +154,14 @@ authRouter.post("/login", async (req, res) => {
 authRouter.get("/me", requireAuth, (req: Request, res) => {
   const { user } = req as AuthorizedRequest;
   res.json(user);
+});
+
+authRouter.post("/logout", (req: Request, res: Response) => {
+  const token = req.cookies.session as string | undefined;
+
+  if (token) deleteSession(token);
+
+  res.clearCookie("session");
+
+  return res.status(204).end();
 });
