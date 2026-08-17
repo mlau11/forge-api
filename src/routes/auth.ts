@@ -1,18 +1,27 @@
 import * as argon2 from "argon2";
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { randomBytes } from "node:crypto";
 import { uuidv7 } from "uuidv7";
 import z from "zod";
 import { db } from "../db.ts";
 import { isSQLiteError } from "../lib/crypto.ts";
 import { EmailTakenError, InvalidCredentialsError } from "../lib/errors.ts";
-import { createSession, SESSION_DURATION_SECONDS } from "../lib/session.ts";
+import {
+  createSession,
+  SESSION_DURATION_SECONDS,
+  type PublicUser,
+} from "../lib/session.ts";
+import { requireAuth } from "../middleware/auth.ts";
 
-interface UserRow {
+export interface UserRow {
   id: string;
   email: string;
   password_hash: string;
   created_at: number;
+}
+
+export interface AuthorizedRequest {
+  user: PublicUser;
 }
 
 type UserInsert = Omit<UserRow, "created_at">;
@@ -139,4 +148,9 @@ authRouter.post("/login", async (req, res) => {
     }
     throw error;
   }
+});
+
+authRouter.get("/me", requireAuth, (req: Request, res) => {
+  const { user } = req as AuthorizedRequest;
+  res.json(user);
 });
