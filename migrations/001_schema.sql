@@ -14,7 +14,7 @@ CREATE TABLE sessions (
 );
 
 CREATE TABLE password_reset_tokens (
-  hash TEXT PRIMARY KEY NOT NULL,
+  hashed_token TEXT PRIMARY KEY NOT NULL,
   user_id TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

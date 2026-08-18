@@ -1,11 +1,12 @@
 import * as argon2 from "argon2";
-import { Router, type Request, type Response } from "express";
+import { Router } from "express";
 import { randomBytes } from "node:crypto";
 import { uuidv7 } from "uuidv7";
 import z from "zod";
 import { db } from "../db.ts";
 import { isSQLiteError } from "../lib/crypto.ts";
 import { EmailTakenError, InvalidCredentialsError } from "../lib/errors.ts";
+import { requestPasswordReset } from "../lib/passwordReset.ts";
 import {
   createSession,
   deleteSession,
@@ -40,6 +41,8 @@ const LoginSchema = z.object({
   email: z.email().toLowerCase(),
   password: z.string(),
 });
+
+const ResetPasswordSchema = z.object({ email: z.email().toLowerCase() });
 
 const insertUser = db.prepare(
   "INSERT INTO users (id, email, password_hash) VALUES (@id, @email, @password_hash)",
@@ -151,12 +154,12 @@ authRouter.post("/login", async (req, res) => {
   }
 });
 
-authRouter.get("/me", requireAuth, (req: Request, res) => {
+authRouter.get("/me", requireAuth, (req, res) => {
   const { user } = req as AuthorizedRequest;
   res.json(user);
 });
 
-authRouter.post("/logout", (req: Request, res: Response) => {
+authRouter.post("/logout", (req, res) => {
   const token = req.cookies.session as string | undefined;
 
   if (token) deleteSession(token);
@@ -164,4 +167,18 @@ authRouter.post("/logout", (req: Request, res: Response) => {
   res.clearCookie("session");
 
   return res.status(204).end();
+});
+
+authRouter.post("/forgot-password", (req, res) => {
+  const parsed = ResetPasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues });
+  }
+
+  requestPasswordReset(parsed.data.email);
+
+  return res.status(200).json({
+    message: "If the email is registered, then a reset link has been sent.",
+  });
 });
