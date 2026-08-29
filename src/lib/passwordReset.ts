@@ -1,5 +1,6 @@
 import { hash } from "argon2";
 import { randomBytes } from "node:crypto";
+import z from "zod";
 import { db } from "../db.ts";
 import { generateSHA256 } from "./crypto.ts";
 import { InvalidPasswordResetTokenError } from "./errors.ts";
@@ -7,16 +8,35 @@ import { currentTimeInSeconds, deleteAllSessionsByUserId } from "./session.ts";
 
 const RESET_TOKEN_DURATION = 60 * 60;
 
+export const ForgotPasswordSchema = z.object({
+  email: z.email().toLowerCase(),
+});
+export const ResetPasswordSchema = z.object({
+  token: z.string(),
+  password: z.string().min(10).max(200),
+});
+
 const findUserByEmail = db.prepare<[string], { id: string }>(
   "SELECT id FROM users WHERE email = ?",
 );
-
 const insertPasswordResetToken = db.prepare<{
   hashed_token: string;
   user_id: string;
   expires_at: number;
 }>(
   "INSERT INTO password_reset_tokens (hashed_token, user_id, expires_at) VALUES (@hashed_token, @user_id, @expires_at)",
+);
+const updatePassword = db.prepare<[string, string]>(
+  "UPDATE users SET password_hash = ? WHERE id = ?",
+);
+const findPasswordResetToken = db.prepare<
+  [string, number],
+  { user_id: string }
+>(
+  "SELECT user_id FROM password_reset_tokens WHERE hashed_token = ? AND expires_at > ?",
+);
+const deletePasswordResetToken = db.prepare<[string]>(
+  "DELETE FROM password_reset_tokens WHERE hashed_token = ?",
 );
 
 export const requestPasswordReset = (email: string): string | undefined => {
@@ -38,19 +58,6 @@ export const requestPasswordReset = (email: string): string | undefined => {
 
   return token;
 };
-
-const updatePassword = db.prepare<[string, string]>(
-  "UPDATE users SET password_hash = ? WHERE id = ?",
-);
-const findPasswordResetToken = db.prepare<
-  [string, number],
-  { user_id: string }
->(
-  "SELECT user_id FROM password_reset_tokens WHERE hashed_token = ? AND expires_at > ?",
-);
-const deletePasswordResetToken = db.prepare<[string]>(
-  "DELETE FROM password_reset_tokens WHERE hashed_token = ?",
-);
 
 export const resetPassword = async (token: string, password: string) => {
   const hashed_token = generateSHA256(token);

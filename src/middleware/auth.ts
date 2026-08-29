@@ -1,5 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
-import { getSessionUser } from "../lib/session.ts";
+import { getSessionUser, type PublicUser } from "../lib/session.ts";
+
+export interface AuthorizedRequest {
+  user: PublicUser;
+}
 
 export const requireAuth = (
   req: Request,

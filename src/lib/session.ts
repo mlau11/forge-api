@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { db } from "../db.ts";
-import type { UserRow } from "../routes/auth.ts";
+import type { UserRow } from "../lib/auth.ts";
 import { generateSHA256 } from "./crypto.ts";
 
 interface SessionRow {
@@ -26,6 +26,9 @@ export const deleteAllSessionsByUserId = db.prepare<[string]>(
 const findUserByHashedToken = db.prepare<[string, number], PublicUser>(
   "SELECT u.id, u.email FROM users u JOIN sessions s ON u.id = s.user_id WHERE hashed_token = ? AND expires_at > ?",
 );
+const deleteSessionByHashedToken = db.prepare<[string]>(
+  "DELETE FROM sessions WHERE hashed_token = ?",
+);
 
 export const createSession = (userId: string): string => {
   const rawToken = randomBytes(32).toString("base64url");
@@ -49,10 +52,6 @@ export const getSessionUser = (rawToken: string): PublicUser | undefined => {
 
   return result;
 };
-
-const deleteSessionByHashedToken = db.prepare<[string]>(
-  "DELETE FROM sessions WHERE hashed_token = ?",
-);
 
 export const deleteSession = (rawToken: string) => {
   const hashed_token = generateSHA256(rawToken);
