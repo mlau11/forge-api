@@ -7,7 +7,14 @@ export class EmailTakenError extends Error {
 
 export class InvalidCredentialsError extends Error {
   constructor() {
-    super("Invalid email or password.");
+    super("Invalid email or password");
     this.name = "InvalidCredentialsError";
+  }
+}
+
+export class InvalidPasswordResetTokenError extends Error {
+  constructor() {
+    super("This password reset link is invalid or expired");
+    this.name = "InvalidPasswordResetTokenError";
   }
 }
