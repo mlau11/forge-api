@@ -1,12 +1,16 @@
-import * as argon2 from "argon2";
+import { hash, verify } from "argon2";
 import { Router } from "express";
 import { randomBytes } from "node:crypto";
 import { uuidv7 } from "uuidv7";
 import z from "zod";
 import { db } from "../db.ts";
 import { isSQLiteError } from "../lib/crypto.ts";
-import { EmailTakenError, InvalidCredentialsError } from "../lib/errors.ts";
-import { requestPasswordReset } from "../lib/passwordReset.ts";
+import {
+  EmailTakenError,
+  InvalidCredentialsError,
+  InvalidPasswordResetTokenError,
+} from "../lib/errors.ts";
+import { requestPasswordReset, resetPassword } from "../lib/passwordReset.ts";
 import {
   createSession,
   deleteSession,
@@ -42,7 +46,12 @@ const LoginSchema = z.object({
   password: z.string(),
 });
 
-const ResetPasswordSchema = z.object({ email: z.email().toLowerCase() });
+const ForgotPasswordSchema = z.object({ email: z.email().toLowerCase() });
+
+const ResetPasswordSchema = z.object({
+  token: z.string(),
+  password: z.string().min(10).max(200),
+});
 
 const insertUser = db.prepare(
   "INSERT INTO users (id, email, password_hash) VALUES (@id, @email, @password_hash)",
@@ -52,7 +61,7 @@ export const registerUser = async ({ email, password }: RegistrationInput) => {
   const id = uuidv7();
 
   try {
-    const password_hash = await argon2.hash(password);
+    const password_hash = await hash(password);
 
     const register = db.transaction((user: UserInsert) => {
       insertUser.run(user);
@@ -79,17 +88,17 @@ const findUserByEmail = db.prepare<[string], UserRow>(
   "SELECT id, email, password_hash FROM users WHERE email = ?",
 );
 
-const DUMMY_HASH = await argon2.hash(randomBytes(32).toString("hex"));
+const DUMMY_HASH = await hash(randomBytes(32).toString("hex"));
 
 const loginUser = async ({ email, password }: LoginInput) => {
   const result = findUserByEmail.get(email);
 
   if (!result) {
-    await argon2.verify(DUMMY_HASH, password);
+    await verify(DUMMY_HASH, password);
     throw new InvalidCredentialsError();
   }
 
-  const isVerified = await argon2.verify(result.password_hash, password);
+  const isVerified = await verify(result.password_hash, password);
 
   if (!isVerified) {
     throw new InvalidCredentialsError();
@@ -170,7 +179,7 @@ authRouter.post("/logout", (req, res) => {
 });
 
 authRouter.post("/forgot-password", (req, res) => {
-  const parsed = ResetPasswordSchema.safeParse(req.body);
+  const parsed = ForgotPasswordSchema.safeParse(req.body);
 
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues });
@@ -181,4 +190,26 @@ authRouter.post("/forgot-password", (req, res) => {
   return res.status(200).json({
     message: "If the email is registered, then a reset link has been sent.",
   });
+});
+
+authRouter.post("/reset-password", async (req, res) => {
+  const parsed = ResetPasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues });
+  }
+
+  try {
+    await resetPassword(parsed.data.token, parsed.data.password);
+
+    return res.status(200).json({ message: "Password updated." });
+  } catch (error) {
+    if (error instanceof InvalidPasswordResetTokenError) {
+      return res
+        .status(400)
+        .json({ error: "This password reset link is invalid or expired." });
+    }
+
+    throw error;
+  }
 });
