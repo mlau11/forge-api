@@ -1,9 +1,16 @@
-import type { NextFunction, Request, Response } from "express";
+import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { getSessionUser, type PublicUser } from "../lib/session.ts";
 
-export interface AuthorizedRequest {
+export interface AuthorizedRequest extends Request {
   user: PublicUser;
 }
+
+type AuthedHandler = (req: AuthorizedRequest, res: Response) => void;
+
+export const authed =
+  (handler: AuthedHandler): RequestHandler =>
+  (req, res) =>
+    handler(req as AuthorizedRequest, res);
 
 export const requireAuth = (
   req: Request,

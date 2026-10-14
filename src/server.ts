@@ -6,6 +6,7 @@ import express, {
   type Response,
 } from "express";
 import { migrate } from "./migrate.ts";
+import { appsRouter } from "./routes/apps.ts";
 import { authRouter } from "./routes/auth.ts";
 
 const app = express();
@@ -27,6 +28,8 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+
+app.use("/", appsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
