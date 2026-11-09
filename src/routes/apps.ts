@@ -98,7 +98,7 @@ appsRouter.get(
 );
 
 appsRouter.post(
-  "/apps/:id",
+  "/apps/:id/versions",
   authed((req, res) => {
     const parsedReq = DefinitionSchema.safeParse(req.body);
     const parsedParams = ParamsSchema.safeParse(req.params);
