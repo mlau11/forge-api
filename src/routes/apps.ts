@@ -49,6 +49,10 @@ const findAppsByUserId = db.prepare<[string], AllAppsSelect>(
   "SELECT id, name, created_at FROM apps WHERE user_id = ? ORDER BY created_at DESC",
 );
 
+const deleteApp = db.prepare<[string, string]>(
+  "DELETE FROM apps WHERE id = ? AND user_id = ?",
+);
+
 appsRouter.post(
   "/apps",
   authed((req, res) => {
@@ -123,5 +127,23 @@ appsRouter.post(
     );
 
     return res.status(201).json({ version: newVersion });
+  }),
+);
+
+appsRouter.delete(
+  "/apps/:id",
+  authed((req, res) => {
+    const parsedParams = ParamsSchema.safeParse(req.params);
+
+    if (!parsedParams.success) {
+      return res.status(400).json({ error: parsedParams.error.issues });
+    }
+
+    const result = deleteApp.run(parsedParams.data.id, req.user.id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "App not found" });
+    }
+    return res.status(204).end();
   }),
 );
